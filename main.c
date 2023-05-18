@@ -347,7 +347,7 @@ void main(void)
     setFrequency_Sinfix_ticks(70);
     while(1) {
        makeWave(GetButton1());
-       readValue(GetADCINA7(),3.3);            //StateMachine(leds_global);testing  sdadsdsd ss
+       readValue(GetADCINA7(),3.3);            //StateMachine(leds_global);
        uiAnalogStatus = GetADCINA7();
        SetLedRed(leds_global[RED].ledState);
        SetLedBlue(leds_global[BLUE].ledState);
