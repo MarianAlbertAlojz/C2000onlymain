@@ -18,7 +18,7 @@ extern uint16_t uiSciMsgReceived;
 
 Uint16 uiRxBuf[10]={0,0,0,0,0,0,0,0,0,0};
 Uint16 uiSciLen=0;
-
+Uin
 uint16_t trimmerValue;
 uint16_t jas=0;
 uint16_t duty_cycle;
@@ -319,6 +319,34 @@ void readValue(uint16_t input,double volt_logic) {
         numberof_measurements = 0;
         total = 0;
     }
+}
+void sendRequest() {
+    /*
+     *
+    ÑCmd1ì Poölite nameranÈ (prÌp.1,2V) nap‰tie v 1mV (LSB First) v sekcii DATA
+    ÑCmd2ì Poölite Vaöe krstnÈ meno (v ASCII znakoch) v sekcii DATA
+    ÑCmd3ì Poölite n·zov firmy BEL ÑCmd4ì v sekcii DATA
+    ÑCmd4ì Povoliù posielanie hodnoty nap‰tia v 1s intervale z ˙lohy Ë.4 (prÌp.230V)
+    ÑCmd5ì Zak·zaù posielanie hodnoty nap‰tia v 1s intervale z ˙lohy Ë.4 (prÌp.230V)
+    Byte V˝znam a obsah bajtu
+    1 0xAA = Start byte
+    2 DÂûka celej spr·vy vr·tane CRC a start bajtu
+    3 0x1B = Adresa odosielateæa
+    4 ID prÌkazu
+    5...n-1 DATA
+    n CRC = suma bajtov 1 aû (n-1)
+     */
+    //moj navrh
+   //1 uint16_t startByte = 0xAA;
+    //2 uint16_t  v com sa lisi od CRC?je to teda suma bytov 1(start byte) a n(crc) + Data suma?
+    //teda startbyte (2Bytes) + CRC (2Bytes) + DATA (n*2BYTES)
+    //3 uint16_t sender = 0x1B pre jedneho 0x1C pre druheho (cize jedno pre odosielatela a jedno pre prijimatela(neskor odosielatela)
+    //4 uint16_t id_request = napr pre CMD4 to bude 4. To znamena 1.user posle id= 4 2. user chyti,spracuje a posiela naspat tiez id=4
+    //5 pri Data CMD1 ulozim napriklad hodnotu 1.98V na 1980mV a posledny bit prvy cize 0000 0111 1011 1100 (1980) invertovat na 0011 1101 1110 0000
+    SciWriteByte(uiR)
+}
+void processMessage() {
+
 }
 
 void main(void)
