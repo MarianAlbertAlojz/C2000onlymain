@@ -501,7 +501,6 @@ void main(void)
     iter = 0;
     EPwm7Regs.CMPA.half.CMPA = 0;
     setFrequency_Sinfix_ticks(70);
-
     sendStart(start_message);
 
     while(1) {
