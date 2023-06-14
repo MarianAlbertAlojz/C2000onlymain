@@ -67,7 +67,7 @@ uint16_t globalCounter;
 uint16_t trimerDelay=0;
 uint16_t waveDelay =0;
 uint16_t readDelay =0;
-
+uint16_t sendDelay =0;
 //WAVE
 
 Uint8 dac=1;
@@ -402,38 +402,41 @@ void executeCommand(Uint8 command) {
                 }else {
                     data_len = 2;
                 }
-                memset(protocol_head.data + data_len, 0, sizeof(protocol_head.data) - data_len);
+
             break;
 
             case 2:
                 //Poölite Vaöe krstnÈ meno (v ASCII znakoch) v sekcii DATA
                 data_len = strlen(cmd2_message);
                 strncpy((char*)protocol_head.data,cmd2_message,data_len);
-                memset(protocol_head.data + data_len, 0, sizeof(protocol_head.data) - data_len);
+
             break;
 
             case 3:
                 //Poölite n·zov firmy BEL ÑCmd4ì v sekcii DATA
                 data_len = strlen(cmd3_message);
                 strncpy((char*)protocol_head.data,cmd3_message,data_len);
-                memset(protocol_head.data + data_len, 0, sizeof(protocol_head.data) - data_len);
+
             break;
 
             case 4:
                 //Povoliù posielanie hodnoty nap‰tia v 1s intervale z ˙lohy Ë.4 (prÌp.230V)
                 voltage_send = 1;
-                memset(protocol_head.data,0,sizeof(protocol_head.data));
+                data_len = 0;
+
             break;
 
             case 5:
                 //Zak·zaù posielanie hodnoty nap‰tia v 1s intervale z ˙lohy Ë.4 (prÌp.230V)
                 voltage_send = 0;
-                memset(protocol_head.data,0,sizeof(protocol_head.data));
+                data_len = 0;
+
             break;
             default:
             // code to execute if expression does not match any of the constants
               break;
         }
+    memset(protocol_head.data + data_len, 0, sizeof(protocol_head.data) - data_len);
     fill_protocol_head(command);
     print_protocol_head(data_len);
 
