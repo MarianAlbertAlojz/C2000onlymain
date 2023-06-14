@@ -2,11 +2,12 @@
 #include <stdio.h>
 #include <file.h>
 #include <math.h>
-
+#include <ctype.h>
+#include <string.h>
 #include "DSP28x_Project.h"     // DSP28x Headerfile
 #include "sci_io.h"
 #include "init.h"
-
+#include <stdlib.h>
 #define TestPinOn()     GpioDataRegs.GPBSET.bit.GPIO33=1
 #define TestPinOff()    GpioDataRegs.GPBCLEAR.bit.GPIO33=1
 #define GetButton1()   (GpioDataRegs.GPBDAT.bit.GPIO55 ? 0:1)
@@ -15,10 +16,33 @@
 
 extern void DSP28x_usDelay(Uint32 Count);
 extern uint16_t uiSciMsgReceived;
+#define MAX_VAL_LEN 8
+double voltage_value_V = 0.049;
+uint16_t voltage_value_mV;
+char result[MAX_VAL_LEN]; // Assuming a maximum length for the resulting string
+int pos = 0;
+uint16_t voltage_value_string[MAX_VAL_LEN];
+//ULOHA 5
+#define SEND_VOLTAGE 1
+char * start_message = "START";
+char * cmd2_message = "marian";
+char * cmd3_message = "Bel power solutions";
+Uint8 start_byte = 0xAA;
+Uint8 sender_address = 0x1B;
 
+
+typedef struct {
+    Uint8 start_byte;
+    Uint8 message_length;
+    Uint8 sender_address;
+    Uint8 command_id;
+    Uint8 crc_sum;
+    Uint8 data[100]; // Flexible array member
+} PROTOCOL;
+PROTOCOL  protocol_head;
 Uint16 uiRxBuf[10]={0,0,0,0,0,0,0,0,0,0};
 Uint16 uiSciLen=0;
-
+uint16_t sendDelay =0;
 uint16_t trimmerValue;
 uint16_t jas=0;
 uint16_t duty_cycle;
@@ -26,7 +50,7 @@ uint16_t delay_time;
 uint16_t ticks = 0;
 Uint8 stavB1;
 Uint8 stavB2;
-
+Uint8 voltage_send = 0;
 Uint8 iter=0;
 Uint8 increment_direction=1;
 
@@ -85,6 +109,10 @@ Uint8 state = INIT;
 LED_INFO * leds_global;
 
 
+void sendCRLF() {
+    SciWriteByte((Uint16)('\r'));
+    SciWriteByte((Uint16)('\n'));
+}
 
 void SetLedBlue(uint16_t a)
 {
@@ -321,6 +349,134 @@ void readValue(uint16_t input,double volt_logic) {
     }
 }
 
+void print_protocol_head(size_t data_len) {
+    SciWriteByte((Uint16)protocol_head.start_byte);
+    SciWriteByte((Uint16)protocol_head.message_length);
+    SciWriteByte((Uint16)protocol_head.sender_address);
+    SciWriteByte((Uint16)protocol_head.command_id);
+    size_t i;
+    for (i=0; i < data_len; ++i) {
+        SciWriteByte(protocol_head.data[i]);
+    }
+
+    SciWriteByte((Uint16)protocol_head.crc_sum);
+}
+void fill_protocol_head(Uint8 command) {
+    size_t var,data_len,data_crc=0;
+
+    protocol_head.start_byte = start_byte;
+    protocol_head.sender_address = sender_address;
+    protocol_head.command_id = command;
+
+    data_len = strlen((char*)protocol_head.data);
+    protocol_head.message_length =
+            sizeof(protocol_head.start_byte) +
+            sizeof(protocol_head.message_length)+
+            sizeof(protocol_head.sender_address)+
+            sizeof(protocol_head.command_id) +
+            data_len +
+            sizeof(protocol_head.crc_sum);
+    for (var = 0; var < data_len; ++var) {
+        data_crc += protocol_head.data[var];
+    }
+    protocol_head.crc_sum =
+            protocol_head.start_byte +
+            protocol_head.message_length+
+            protocol_head.sender_address+
+            protocol_head.command_id+data_crc;
+}
+void executeCommand(Uint8 command) {
+    size_t data_len = 0;
+    Uint8 lsb;
+    Uint8 msb;
+    switch (command) {
+            case 1:
+                //Poölite nameranÈ (prÌp.1,2V) nap‰tie v 1mV (LSB First) v sekcii DATA
+
+                voltage_value_mV =(int)(voltage_value_V * 1000);
+                lsb = voltage_value_mV & 0xFF;
+                msb = (voltage_value_mV >> 8) & 0xFF;
+                protocol_head.data[0] = lsb;
+                protocol_head.data[1] = msb;
+                if(msb ==0 ){
+                    data_len = 1;
+                }else {
+                    data_len = 2;
+                }
+                memset(protocol_head.data + data_len, 0, sizeof(protocol_head.data) - data_len);
+            break;
+
+            case 2:
+                //Poölite Vaöe krstnÈ meno (v ASCII znakoch) v sekcii DATA
+                data_len = strlen(cmd2_message);
+                strncpy((char*)protocol_head.data,cmd2_message,data_len);
+                memset(protocol_head.data + data_len, 0, sizeof(protocol_head.data) - data_len);
+            break;
+
+            case 3:
+                //Poölite n·zov firmy BEL ÑCmd4ì v sekcii DATA
+                data_len = strlen(cmd3_message);
+                strncpy((char*)protocol_head.data,cmd3_message,data_len);
+                memset(protocol_head.data + data_len, 0, sizeof(protocol_head.data) - data_len);
+            break;
+
+            case 4:
+                //Povoliù posielanie hodnoty nap‰tia v 1s intervale z ˙lohy Ë.4 (prÌp.230V)
+                voltage_send = 1;
+                memset(protocol_head.data,0,sizeof(protocol_head.data));
+            break;
+
+            case 5:
+                //Zak·zaù posielanie hodnoty nap‰tia v 1s intervale z ˙lohy Ë.4 (prÌp.230V)
+                voltage_send = 0;
+                memset(protocol_head.data,0,sizeof(protocol_head.data));
+            break;
+            default:
+            // code to execute if expression does not match any of the constants
+              break;
+        }
+    fill_protocol_head(command);
+    print_protocol_head(data_len);
+
+}
+void toLowercase(char* str) {
+    while (*str) {
+        *str = tolower(*str);
+        str++;
+    }
+}
+
+Uint8 extractNumber(const char * cmdString) {
+   const char * cmd_prefix = "cmd";
+   size_t prefixLen = strlen(cmd_prefix);
+   char lower_case[10];
+   strcpy(lower_case,cmdString);
+   toLowercase(lower_case);
+
+   if (strncmp(lower_case, cmd_prefix, prefixLen) == 0) {
+       int number = atoi(lower_case + prefixLen);
+       return number;
+   }
+   return 255;
+}
+
+void processMessage() {
+    size_t i;
+    for (i= 0; i < sizeof(uiRxBuf) / sizeof(uiRxBuf[0]); i++) {
+        pos += sprintf(result + pos, "%c", (char)uiRxBuf[i]);
+    }
+    executeCommand(extractNumber(result));
+    memset(result, 0, sizeof(result));
+    pos = 0;
+}
+
+void sendStart(char * message) {
+    char * var = message;
+    for (; *var != '\0'; var++) {
+        SciWriteByte((Uint16)*var);
+    }
+    sendCRLF();
+}
 void main(void)
 {
     /* SetLedRed(1);
@@ -342,25 +498,34 @@ void main(void)
     leds_global = createLedStructs();
     waveDelay = globalCounter;
     readDelay = globalCounter;
+    sendDelay = globalCounter;
     iter = 0;
     EPwm7Regs.CMPA.half.CMPA = 0;
     setFrequency_Sinfix_ticks(70);
+
+    sendStart(start_message);
+
     while(1) {
-       makeWave(GetButton1());
-       readValue(GetADCINA7(),3.3);            //StateMachine(leds_global);
-       uiAnalogStatus = GetADCINA7();
-       SetLedRed(leds_global[RED].ledState);
-       SetLedBlue(leds_global[BLUE].ledState);
+       if(globalCounter - sendDelay > 10000 && voltage_send){
+           sendDelay = globalCounter;
+           executeCommand(SEND_VOLTAGE);
+           leds_global[BLUE].ledState = !leds_global[BLUE].ledState;
+       }
+       //makeWave(GetButton1());
+       //readValue(GetADCINA7(),3.3);
+       //StateMachine(leds_global);
+       //uiAnalogStatus = GetADCINA7();
        //blinkLed(&leds_global[BLUE], 300, 1000);
        //trimer(&leds_global[BLUE]);
-    }
+       SetLedRed(leds_global[RED].ledState);
+       SetLedBlue(leds_global[BLUE].ledState);
 
-    for(;;)
-    {
-
-        if(uiSciMsgReceived)//some message from SCI is received
-        {
-            uiSciLen = SciReadMsg(uiRxBuf);//read buff and buffer length
-        }
+       if(uiSciMsgReceived)//some start_message from SCI is received
+           {
+               leds_global[RED].ledState = 1;
+               uiSciLen = SciReadMsg(uiRxBuf);//read buff and buffer length
+               processMessage();
+               leds_global[RED].ledState = 0;
+           }
     }
 }
