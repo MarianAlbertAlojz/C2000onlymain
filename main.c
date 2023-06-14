@@ -42,7 +42,6 @@ typedef struct {
 PROTOCOL  protocol_head;
 Uint16 uiRxBuf[10]={0,0,0,0,0,0,0,0,0,0};
 Uint16 uiSciLen=0;
-uint16_t sendDelay =0;
 uint16_t trimmerValue;
 uint16_t jas=0;
 uint16_t duty_cycle;
